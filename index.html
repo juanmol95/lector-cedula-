@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro y Consulta de Pacientes</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 850px; margin: 1rem auto; padding: 0 1rem; color: #222; }
+  
+  /* PESTAÑAS (TABS) */
+  .tabs-header { display: flex; border-bottom: 2px solid #084298; margin-bottom: 1.5rem; background: #f0f4f8; border-radius: 6px 6px 0 0; }
+  .tab-btn { flex: 1; padding: 0.8rem 1rem; border: none; background: none; font-size: 1rem; font-weight: bold; color: #555; cursor: pointer; text-align: center; border-bottom: 3px solid transparent; }
+  .tab-btn.active { color: #084298; border-bottom: 3px solid #084298; background: #ffffff; border-radius: 6px 6px 0 0; }
+  
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* BLOQUES Y CAMPOS */
+  .box { border: 1px solid #d0dbe5; padding: 1.2rem; border-radius: 8px; background: #f0f4f8; margin-bottom: 1.5rem; }
+  video { width: 100%; max-height: 300px; background: #000; border-radius: 8px; display: none; margin-bottom: 0.5rem; }
+  button, input[type=file] { padding: .5rem .9rem; margin: .2rem; cursor: pointer; }
+  
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 0.8rem; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem; margin-bottom: 0.8rem; }
+  
+  .campo { display: flex; flex-direction: column; }
+  label { font-weight: bold; font-size: 0.85rem; margin-bottom: 0.2rem; }
+  input[type=text], input[type=number], input[type=date], select { 
+    padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; background: #fff; 
+  }
+  #estado, #estado_consulta { font-weight: bold; margin-top: 0.5rem; color: #333; }
+  
+  .section-title { margin-top: 0; margin-bottom: 1rem; border-bottom: 2px solid #084298; padding-bottom: 0.3rem; color: #084298; }
+  .copiar-opt { font-size: 0.78rem; font-weight: normal; color: #084298; cursor: pointer; margin-top: 0.3rem; display: flex; align-items: center; gap: 0.3rem; }
+
+  .medico-card { background: #ffffff; border: 1px solid #b6d4fe; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; position: relative; }
+  .btn-eliminar-medico { background: #dc3545; color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; float: right; cursor: pointer; }
+
+  /* ESTILOS DE LA PLANILLA / REPORTE VISUAL */
+  #vistaPreviaContainer { display: block; margin-top: 2rem; background: #fff; border: 2px solid #111; padding: 1.5rem; font-family: Arial, sans-serif; font-size: 13px; color: #000; }
+  .pdf-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 0.3rem; margin-bottom: 0.6rem; }
+  .pdf-header .brand { font-size: 1.6rem; font-weight: bold; font-family: serif; font-style: italic; }
+  .pdf-header h1 { font-size: 1.25rem; margin: 0; font-weight: bold; text-align: center; flex-grow: 1; text-transform: none; }
+  .pdf-header .fax { font-size: 0.8rem; text-align: right; white-space: nowrap; }
+  
+  .pdf-instructions { font-size: 0.75rem; line-height: 1.25; margin-bottom: 0.8rem; border-bottom: 1px solid #000; padding-bottom: 0.5rem; }
+  .pdf-instructions p { margin: 0 0 0.4rem 0; }
+  
+  .pdf-sec-title { font-size: 1.05rem; font-weight: bold; border-bottom: 1px solid #000; margin-top: 0.8rem; margin-bottom: 0.4rem; padding-bottom: 0.1rem; }
+  .pdf-row { display: flex; flex-wrap: wrap; margin-bottom: 0.3rem; }
+  .pdf-col { flex: 1; min-width: 130px; padding-right: 0.5rem; }
+  .pdf-label { font-size: 0.8rem; color: #222; margin-right: 0.2rem; }
+  .pdf-val { font-weight: bold; border-bottom: 1px dotted #666; display: inline-block; min-width: 40px; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #vistaPreviaContainer, #vistaPreviaContainer * { visibility: visible; }
+    #vistaPreviaContainer { position: absolute; left: 0; top: 0; width: 100%; border: none; padding: 0; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <h2>Registro Clínico y de Dispositivo</h2>
+
+  <!-- ENCABEZADO DE PESTAÑAS -->
+  <div class="tabs-header">
+    <button type="button" class="tab-btn active" onclick="cambiarPestaña('tab-registro', this)">1. Registro de Paciente</button>
+    <button type="button" class="tab-btn" onclick="cambiarPestaña('tab-consulta', this)">2. Consultar Paciente por Cédula</button>
+  </div>
+
+  <!-- PESTAÑA 1: REGISTRO -->
+  <div id="tab-registro" class="tab-content active">
+    <form id="formPaciente">
+
+      <!-- DATOS DE DILIGENCIAMIENTO -->
+      <div class="box" style="background: #eef6ff; border-color: #b6d4fe;">
+        <h3 class="section-title">Datos de Diligenciamiento</h3>
+        <div class="grid-3">
+          <div class="campo">
+            <label>Fecha Diligenciamiento:</label>
+            <input type="date" id="fecha_diligenciamiento">
+          </div>
+          <div class="campo">
+            <label>Nombre Especialista:</label>
+            <input type="text" id="esp_nombre" placeholder="Nombre(s)">
+          </div>
+          <div class="campo">
+            <label>Apellido Especialista:</label>
+            <input type="text" id="esp_apellido" placeholder="Apellido(s)">
+          </div>
+        </div>
+      </div>
+
+      <!-- ESCANEO CÉDULA -->
+      <div class="box">
+        <h3 class="section-title">Escaneo / Lectura de Cédula (PDF417 / MRZ)</h3>
+        <video id="video" autoplay playsinline muted></video>
+        <div>
+          <button type="button" id="btnCam">Abrir Cámara</button>
+          <button type="button" id="btnCapturar" style="display:none;">Tomar Foto y Procesar</button>
+          <input type="file" id="archivo" accept="image/*">
+        </div>
+        <p id="estado">Selecciona una imagen o usa la cámara para autocompletar la cédula.</p>
+      </div>
+
+      <!-- DATALISTS DE CIUDADES Y DEPTOS -->
+      <datalist id="lista_ciudades">
+        <option value="BOGOTÁ, D.C.">
+        <option value="MEDELLÍN">
+        <option value="CALI">
+        <option value="BARRANQUILLA">
+        <option value="CARTAGENA">
+        <option value="BUCARAMANGA">
+        <option value="PEREIRA">
+        <option value="MANIZALES">
+        <option value="CÚCUTA">
+        <option value="IBAGUÉ">
+        <option value="SANTA MARTA">
+        <option value="VILLAVICENCIO">
+        <option value="PASTO">
+      </datalist>
+
+      <datalist id="lista_deptos">
+        <option value="BOGOTÁ, D.C.">
+        <option value="ANTIOQUIA">
+        <option value="VALLE DEL CAUCA">
+        <option value="ATLÁNTICO">
+        <option value="BOLÍVAR">
+        <option value="SANTANDER">
+        <option value="RISARALDA">
+        <option value="CALDAS">
+        <option value="NORTE DE SANTANDER">
+        <option value="TOLIMA">
+        <option value="MAGDALENA">
+        <option value="META">
+        <option value="NARIÑO">
+      </datalist>
+
+      <!-- 1. INFORMACIÓN DEL PACIENTE -->
+      <div class="box">
+        <h3 class="section-title">1. Información Personal del Paciente (Patient Information)</h3>
+        
+        <div class="grid-3">
+          <div class="campo">
+            <label>Número de Documento (SSN/ID):</label>
+            <input type="text" id="documento" placeholder="C.C. / T.I.">
+          </div>
+          <div class="campo">
+            <label>Historia Clínica (Medical Record):</label>
+            <input type="text" id="medical_record" placeholder="N° Historia Clínica">
+          </div>
+          <div class="campo">
+            <label>Fecha Nacimiento (DOB):</label>
+            <input type="text" id="fecha_nacimiento" placeholder="AAAA-MM-DD">
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="campo">
+            <label>Primer Nombre (First Name):</label>
+            <input type="text" id="primer_nombre">
+          </div>
+          <div class="campo">
+            <label>Segundo Nombre (Middle Name):</label>
+            <input type="text" id="segundo_nombre">
+          </div>
+          <div class="campo">
+            <label>Sufijo (Suffix):</label>
+            <input type="text" id="sufijo_paciente" placeholder="Ej: Jr., Sr.">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label>Primer Apellido (Last Name Part 1):</label>
+            <input type="text" id="primer_apellido">
+          </div>
+          <div class="campo">
+            <label>Segundo Apellido (Last Name Part 2):</label>
+            <input type="text" id="segundo_apellido">
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="campo">
+            <label>Sexo (Gender):</label>
+            <select id="sexo">
+              <option value="">-- Seleccionar --</option>
+              <option value="Female">Female (Femenino)</option>
+              <option value="Male">Male (Masculino)</option>
+              <option value="Other">Otro</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Factor RH:</label>
+            <input type="text" id="rh">
+          </div>
+          <div class="campo">
+            <label>EPS / Aseguradora:</label>
+            <select id="eps_select" onchange="evaluarEpsOtra(this.value)">
+              <option value="">-- Seleccione EPS --</option>
+              <option value="SURA EPS">SURA EPS</option>
+              <option value="SANITAS EPS">SANITAS EPS</option>
+              <option value="COMPENSAR EPS">COMPENSAR EPS</option>
+              <option value="SALUD TOTAL EPS">SALUD TOTAL EPS</option>
+              <option value="NUEVA EPS">NUEVA EPS</option>
+              <option value="FAMISANAR EPS">FAMISANAR EPS</option>
+              <option value="CAPITAL SALUD">CAPITAL SALUD</option>
+              <option value="SAVIA SALUD EPS">SAVIA SALUD EPS</option>
+              <option value="COOSALUD EPS">COOSALUD EPS</option>
+              <option value="POLICÍA / MILITAR">POLICÍA / MILITAR</option>
+              <option value="OTRA">Otra (Especificar)</option>
+            </select>
+            <input type="text" id="eps_otra" placeholder="Nombre de la EPS..." style="display: none; margin-top: 0.4rem;">
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top: 0.5rem;">
+          <div class="campo">
+            <label>Dirección Paciente (Street):</label>
+            <input type="text" id="direccion" placeholder="Ej: Calle 113 #7-45">
+          </div>
+          <div class="campo">
+            <label>Teléfono Paciente (Phone):</label>
+            <input type="text" id="telefono" placeholder="Ej: +57 3001234567 o 601 1234567">
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="campo">
+            <label>Ciudad (City):</label>
+            <input type="text" id="ciudad" list="lista_ciudades" placeholder="Seleccione o escriba..." oninput="autocompletarDepto(this.value, 'departamento')">
+          </div>
+          <div class="campo">
+            <label>Departamento (State):</label>
+            <input type="text" id="departamento" list="lista_deptos" placeholder="Seleccione o escriba...">
+          </div>
+          <div class="campo">
+            <label>País (Country):</label>
+            <input type="text" id="pais" value="COLOMBIA">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. DIAGNÓSTICO CLÍNICO -->
+      <div class="box">
+        <h3 class="section-title">2. Diagnóstico e Indicaciones de Terapia (Indications for Therapy)</h3>
+        
+        <div class="grid-2">
+          <div class="campo">
+            <label>Indicación Principal (Primary Indication):</label>
+            <select id="diagnostico_select" onchange="evaluarDiagnosticoOtro(this.value)">
+              <option value="">-- Seleccione un diagnóstico --</option>
+              <option value="CRT: Ejection fraction">CRT: Ejection fraction</option>
+              <option value="Brady: (09) Atrial tachycardia">Brady: (09) Atrial tachycardia</option>
+              <option value="Brady: (26) 2° AV block">Brady: (26) 2° AV block</option>
+              <option value="Brady: Sick Sinus Node Syndrome">Brady: Sick Sinus Node Syndrome</option>
+              <option value="OTRO">Otro (Especificar)</option>
+            </select>
+            <input type="text" id="diagnostico_otro" placeholder="Escriba el diagnóstico..." style="display: none; margin-top: 0.5rem;">
+          </div>
+
+          <div class="campo">
+            <label>FE (% Fracción Eyección):</label>
+            <input type="number" id="fe_porcentaje" min="0" max="100" placeholder="Ej: 25">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label>Otras Indicaciones (Indications for Therapy - Other):</label>
+          <input type="text" id="indicaciones_otras" placeholder="Otras indicaciones o diagnósticos secundarios...">
+        </div>
+      </div>
+
+      <!-- 3. INSTITUCIÓN Y MÉDICOS TRATANTES -->
+      <div class="box">
+        <h3 class="section-title">3. Información de Hospital y Médico(s) (Physician and Hospital Info)</h3>
+        
+        <div style="margin-bottom: 1.5rem;">
+          <label style="color: #0056b3; margin-bottom: 0.6rem; display: block; font-weight: bold;">Hospital / Clínica Sede (Implanting Facility)</label>
+          <div class="grid-2">
+            <div class="campo">
+              <label>Nombre del Hospital / Sede:</label>
+              <input type="text" id="hospital_nombre" list="lista_hospitales" placeholder="Seleccione o escriba..." oninput="autocompletarHospital(this.value)">
+              <datalist id="lista_hospitales">
+                <option value="HOSPITAL TE CUIDAMOS-SEDE TESORO">
+                <option value="CLINICA SANANDO CORAZONES">
+                <option value="FUNDACION SANTA FE DE BOGOTA">
+                <option value="CLINICA SHAIO">
+              </datalist>
+            </div>
+            <div class="campo">
+              <label>Dirección (Street):</label>
+              <input type="text" id="hospital_direccion" placeholder="Dirección de la sede" oninput="sincronizarTodosLosMedicos()">
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="campo">
+              <label>Ciudad (City):</label>
+              <input type="text" id="hospital_ciudad" list="lista_ciudades" placeholder="Seleccione o escriba..." oninput="autocompletarDepto(this.value, 'hospital_departamento'); sincronizarTodosLosMedicos();">
+            </div>
+            <div class="campo">
+              <label>Departamento (State):</label>
+              <input type="text" id="hospital_departamento" list="lista_deptos" placeholder="Seleccione o escriba...">
+            </div>
+            <div class="campo">
+              <label>Teléfono Hospital (Ej: 601 1234567):</label>
+              <input type="text" id="hospital_telefono" placeholder="Ej: 601 1234567" oninput="sincronizarTodosLosMedicos()">
+            </div>
+          </div>
+        </div>
+
+        <div id="contenedor_medicos"></div>
+
+        <button type="button" onclick="agregarMedico()" style="background: #084298; color: white; border: none; padding: 0.6rem 1rem; border-radius: 4px; font-weight: bold; cursor: pointer;">
+          Agregar otro Médico / Especialista
+        </button>
+      </div>
+
+      <!-- TRES OPCIONES DE ACCIÓN -->
+      <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+        <button type="button" id="btnGuardar" style="flex: 2; background: #28a745; color: white; border: none; font-weight: bold; border-radius: 4px; padding: 0.9rem; cursor: pointer; font-size: 1.05rem;">
+          Guardar Registro
+        </button>
+        <button type="button" onclick="window.print()" style="flex: 1.5; background: #0056b3; color: white; border: none; font-weight: bold; border-radius: 4px; padding: 0.9rem; cursor: pointer; font-size: 1.05rem;">
+          Descargar como PDF
+        </button>
+        <button type="button" onclick="limpiarFormulario()" style="flex: 1; background: #dc3545; color: white; border: none; font-weight: bold; border-radius: 4px; padding: 0.9rem; cursor: pointer; font-size: 1.05rem;">
+          Eliminar Paciente
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- PESTAÑA 2: CONSULTA Y MODIFICACIÓN POR CÉDULA -->
+  <div id="tab-consulta" class="tab-content">
+    <div class="box" style="background: #eef6ff; border-color: #b6d4fe;">
+      <h3 class="section-title">Consulta de Paciente por Número de Documento</h3>
+      <div style="display: flex; gap: 0.8rem; align-items: flex-end;">
+        <div class="campo" style="flex: 2; margin-bottom: 0;">
+          <label>Número de Cédula / Documento:</label>
+          <input type="text" id="consulta_cc" placeholder="Ingrese número de documento para consultar...">
+        </div>
+        <button type="button" onclick="consultarPaciente()" style="background: #084298; color: white; border: none; padding: 0.6rem 1.2rem; font-weight: bold; border-radius: 4px; cursor: pointer;">
+          Consultar
+        </button>
+      </div>
+      <p id="estado_consulta"></p>
+    </div>
+  </div>
+</div>
+
+<!-- REPORTE VISUAL (ESTILO BOSTON SCIENTIFIC) -->
+<div id="vistaPreviaContainer">
+  <div class="pdf-header">
+    <div class="brand">Boston Scientific</div>
+    <h1>Warranty Validation and Product Registration</h1>
+    <div class="fax">Fax: 651.582.3126</div>
+  </div>
+
+  <div class="pdf-instructions">
+    <p>Complete all applicable information, as available and as permitted by law, and transmit to Boston Scientific CRM, Medical Records. US regulations require that distribution and/or implant of devices be tracked and reported to Boston Scientific. Also transmit data from the programmer, such as patient data and QUICK NOTES™.</p>
+    <p>Use the tab key to quickly move from field to field. Hover the cursor over any field to display a completion hint. Print form and place labels of product information, if desired.</p>
+  </div>
+
+  <!-- 1. PATIENT INFORMATION -->
+  <div class="pdf-sec-title">Patient Information</div>
+  <div class="pdf-row">
+    <div class="pdf-col" style="flex: 2;"><span class="pdf-label">Last Name:</span> <span class="pdf-val" id="lbl_last_name">--</span></div>
+    <div class="pdf-col" style="flex: 1.5;"><span class="pdf-label">First Name:</span> <span class="pdf-val" id="lbl_first_name">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">Middle:</span> <span class="pdf-val" id="lbl_middle_name">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">Suffix:</span> <span class="pdf-val" id="lbl_suffix">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">Gender:</span> <span class="pdf-val" id="lbl_gender">--</span></div>
+  </div>
+
+  <div class="pdf-row">
+    <div class="pdf-col" style="flex: 2;"><span class="pdf-label">Street:</span> <span class="pdf-val" id="lbl_street">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">City:</span> <span class="pdf-val" id="lbl_city">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">State:</span> <span class="pdf-val" id="lbl_state">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">Country:</span> <span class="pdf-val" id="lbl_country">COLOMBIA</span></div>
+  </div>
+
+  <div class="pdf-row">
+    <div class="pdf-col"><span class="pdf-label">Phone:</span> <span class="pdf-val" id="lbl_phone">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">SSN:</span> <span class="pdf-val" id="lbl_ssn">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">DOB:</span> <span class="pdf-val" id="lbl_dob">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">Medical Record:</span> <span class="pdf-val" id="lbl_mrn">--</span></div>
+    <div class="pdf-col"><span class="pdf-label">EPS:</span> <span class="pdf-val" id="lbl_eps">--</span></div>
+  </div>
+
+  <!-- 2. INDICATIONS FOR THERAPY -->
+  <div class="pdf-sec-title">Indications for Therapy</div>
+  <div class="pdf-row">
+    <div class="pdf-col" style="flex: 2;"><span class="pdf-label">Indications for Theray (Primary):</span> <span class="pdf-val" id="lbl_ind_primary">--</span></div>
+    <div class="pdf-col" style="flex: 2;"><span class="pdf-label">Indications for Theray (Other):</span> <span class="pdf-val" id="lbl_ind_other">--</span></div>
+  </div>
+
+  <!-- 3. PHYSICIAN AND HOSPITAL INFORMATION -->
+  <div class="pdf-sec-title">Physician and Hospital Information</div>
+  <div style="margin-bottom: 0.5rem; background: #fafafa; padding: 0.3rem; border: 1px solid #eee;">
+    <span class="pdf-label">Hospital / Sede:</span> <strong id="lbl_hosp_name">--</strong> | 
+    <span class="pdf-label">Dirección:</span> <span id="lbl_hosp_dir">--</span> | 
+    <span class="pdf-label">Ciudad:</span> <span id="lbl_hosp_city">--</span> | 
+    <span class="pdf-label">Tel:</span> <span id="lbl_hosp_tel">--</span>
+  </div>
+
+  <div id="lbl_medicos_lista"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const API_URL = "http://127.0.0.1:8001/api";
+let stream = null;
+let contadorMedicos = 0;
+
+document.addEventListener("DOMContentLoaded", () => {
+  const hoy = new Date().toISOString().split('T')[0];
+  $("fecha_diligenciamiento").value = hoy;
+  agregarMedico();
+});
+
+function cambiarPestaña(tabId, btnElement) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  $(tabId).classList.add('active');
+  btnElement.classList.add('active');
+}
+
+function evaluarEpsOtra(val) {
+  const inputOtra = $("eps_otra");
+  if (val === "OTRA") {
+    inputOtra.style.display = "block";
+  } else {
+    inputOtra.style.display = "none";
+    inputOtra.value = "";
+  }
+}
+
+function agregarMedico() {
+  contadorMedicos++;
+  const id = contadorMedicos;
+  
+  const contenedor = $("contenedor_medicos");
+  const divMedico = document.createElement("div");
+  divMedico.className = "medico-card";
+  divMedico.id = `medico_card_${id}`;
+  
+  const btnEliminar = id > 1 
+    ? `<button type="button" class="btn-eliminar-medico" onclick="eliminarMedico(${id})">Eliminar</button>` 
+    : '';
+
+  divMedico.innerHTML = `
+    ${btnEliminar}
+    <h4 style="margin-top:0; color:#084298;">Médico / Especialista #${id}</h4>
+    
+    <div class="grid-2">
+      <div class="campo">
+        <label style="color: #084298;">Rol / Cargo:</label>
+        <select class="med_rol">
+          <option value="Implanting">Implanting Physician (Implantador)</option>
+          <option value="Following">Following Physician (Seguimiento)</option>
+          <option value="Referring">Referring Physician (Remitente)</option>
+          <option value="Other">Otro Cargo / Especialista</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Especialidad (Specialty):</label>
+        <input type="text" class="med_especialidad" placeholder="Ej: EP">
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="campo">
+        <label>Nombres Médico:</label>
+        <input type="text" class="med_nombre" placeholder="Ej: Carlos">
+      </div>
+      <div class="campo">
+        <label>Apellidos Médico:</label>
+        <input type="text" class="med_apellido" placeholder="Ej: Ramos">
+      </div>
+      <div class="campo">
+        <label>Sufijo / Título:</label>
+        <input type="text" class="med_sufijo" value="Dr.">
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="campo">
+        <label>Dirección Consultorio/Sede:</label>
+        <input type="text" class="med_direccion">
+        <label class="copiar-opt">
+          <input type="checkbox" class="chk_misma_dir" onchange="sincronizarFilaMedico(${id})">
+          Misma dirección del hospital
+        </label>
+      </div>
+      <div class="campo">
+        <label>Ciudad:</label>
+        <input type="text" class="med_ciudad" list="lista_ciudades" placeholder="Seleccione o escriba...">
+        <label class="copiar-opt">
+          <input type="checkbox" class="chk_misma_ciudad" onchange="sincronizarFilaMedico(${id})">
+          Misma ciudad del hospital
+        </label>
+      </div>
+      <div class="campo">
+        <label>Teléfono Contacto:</label>
+        <input type="text" class="med_telefono">
+        <label class="copiar-opt">
+          <input type="checkbox" class="chk_mismo_tel" onchange="sincronizarFilaMedico(${id})">
+          Mismo teléfono del hospital
+        </label>
+      </div>
+    </div>
+  `;
+  
+  contenedor.appendChild(divMedico);
+}
+
+function eliminarMedico(id) {
+  const card = $(`medico_card_${id}`);
+  if (card) card.remove();
+}
+
+function sincronizarFilaMedico(id) {
+  const card = $(`medico_card_${id}`);
+  if (!card) return;
+
+  if (card.querySelector('.chk_misma_dir').checked) {
+    card.querySelector('.med_direccion').value = $("hospital_direccion").value;
+  }
+  if (card.querySelector('.chk_misma_ciudad').checked) {
+    card.querySelector('.med_ciudad').value = $("hospital_ciudad").value;
+  }
+  if (card.querySelector('.chk_mismo_tel').checked) {
+    card.querySelector('.med_telefono').value = $("hospital_telefono").value;
+  }
+}
+
+function sincronizarTodosLosMedicos() {
+  const cards = document.querySelectorAll('.medico-card');
+  cards.forEach(card => {
+    const id = card.id.replace('medico_card_', '');
+    sincronizarFilaMedico(id);
+  });
+}
+
+function poblarFormulario(p) {
+  $("documento").value = p.documento || "";
+  $("primer_nombre").value = p.primer_nombre || "";
+  $("segundo_nombre").value = p.segundo_nombre || "";
+  $("primer_apellido").value = p.primer_apellido || "";
+  $("segundo_apellido").value = p.segundo_apellido || "";
+  $("sexo").value = p.sexo === "M" ? "Male" : (p.sexo === "F" ? "Female" : p.sexo || "");
+  $("fecha_nacimiento").value = p.fecha_nacimiento || "";
+  $("rh").value = p.rh || "";
+}
+
+async function enviarServidor(blob) {
+  $("estado").textContent = "Procesando imagen (PDF417 / MRZ)...";
+  $("estado").style.color = "blue";
+
+  const formData = new FormData();
+  formData.append("file", blob, "cedula.jpg");
+
+  try {
+    const res = await fetch(`${API_URL}/extraer-paciente`, { method: "POST", body: formData });
+    const data = await res.json();
+
+    if (res.ok && data.exito) {
+      poblarFormulario(data.paciente);
+      $("estado").textContent = `Leído con éxito [${data.tipo_codigo}]`;
+      $("estado").style.color = "green";
+    } else {
+      $("estado").textContent = "Error: " + (data.detail || "No se pudo leer el documento.");
+      $("estado").style.color = "red";
+    }
+  } catch (err) {
+    $("estado").textContent = "Error conectando con el servidor en Python (127.0.0.1:8001).";
+    $("estado").style.color = "red";
+  }
+}
+
+function autocompletarHospital(hospital) {
+  const baseDatosHospitales = {
+    "HOSPITAL TE CUIDAMOS-SEDE TESORO": {
+      direccion: "Avenida Carrera 30 #53b-50",
+      ciudad: "BOGOTÁ, D.C.",
+      departamento: "BOGOTÁ, D.C.",
+      telefono: "601 1234567"
+    },
+    "CLINICA SANANDO CORAZONES": {
+      direccion: "Avenida Calle 26 #103-09",
+      ciudad: "BOGOTÁ, D.C.",
+      departamento: "BOGOTÁ, D.C.",
+      telefono: "601 4208000"
+    },
+    "FUNDACION SANTA FE DE BOGOTA": {
+      direccion: "Carrera 9 #116-20",
+      ciudad: "BOGOTÁ, D.C.",
+      departamento: "BOGOTÁ, D.C.",
+      telefono: "601 6030303"
+    },
+    "CLINICA SHAIO": {
+      direccion: "Diagonal 115A #70C-75",
+      ciudad: "BOGOTÁ, D.C.",
+      departamento: "BOGOTÁ, D.C.",
+      telefono: "601 5933000"
+    }
+  };
+
+  const busqueda = hospital.trim().toUpperCase();
+  if (baseDatosHospitales[busqueda]) {
+    $("hospital_direccion").value = baseDatosHospitales[busqueda].direccion;
+    $("hospital_ciudad").value = baseDatosHospitales[busqueda].ciudad;
+    $("hospital_departamento").value = baseDatosHospitales[busqueda].departamento;
+    $("hospital_telefono").value = baseDatosHospitales[busqueda].telefono;
+    sincronizarTodosLosMedicos();
+  }
+}
+
+function autocompletarDepto(ciudad, idTargetDepto) {
+  const ciudadUpper = ciudad.toUpperCase().trim();
+  const mapaDeptos = {
+    "BOGOTÁ, D.C.": "BOGOTÁ, D.C.",
+    "MEDELLÍN": "ANTIOQUIA",
+    "CALI": "VALLE DEL CAUCA",
+    "BARRANQUILLA": "ATLÁNTICO",
+    "CARTAGENA": "BOLÍVAR",
+    "BUCARAMANGA": "SANTANDER"
+  };
+
+  if (mapaDeptos[ciudadUpper] && $(idTargetDepto)) {$(idTargetDepto).value = mapaDeptos[ciudadUpper];
+  }
+}
+
+function evaluarDiagnosticoOtro(valor) {
+  const inputOtro = $("diagnostico_otro");
+  if (valor === "OTRO") {
+    inputOtro.style.display = "block";
+  } else {
+    inputOtro.style.display = "none";
+    inputOtro.value = "";
+  }
+}
+
+$("archivo").onchange = e => {
+  const file = e.target.files[0];
+  if (file) enviarServidor(file);
+};
+
+$("btnCam").onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    $("video").srcObject = stream;
+    $("video").style.display = "block";
+    $("btnCapturar").style.display = "inline-block";
+    $("estado").textContent = "Cámara activa. Enfoca el código y haz clic en Tomar Foto.";
+  } catch (err) {
+    $("estado").textContent = "No se pudo acceder a la cámara: " + err.message;
+  }
+};
+
+$("btnCapturar").onclick = () => {
+  const video = $("video");
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  canvas.toBlob(blob => {
+    enviarServidor(blob);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    $("video").style.display = "none";
+    $("btnCapturar").style.display = "none";
+  }, "image/jpeg");
+};
+
+// GUARDAR REGISTRO
+$("btnGuardar").onclick = async () => {
+  const datos = obtenerObjetoFormulario();
+  if (!datos.paciente.documento) {
+    alert("El número de documento del paciente es obligatorio.");
+    return;
+  }
+
+  // Guardar en base de datos local y renderizar
+  localStorage.setItem(`paciente_${datos.paciente.documento}`, JSON.stringify(datos));
+  renderizarReporteVisual(datos);
+  alert("Registro guardado con éxito.");
+};
+
+// CONSULTAR POR CÉDULA DESDE PESTAÑA 2
+function consultarPaciente() {
+  const cc = $("consulta_cc").value.trim();
+  if (!cc) {
+    alert("Ingrese un número de cédula.");
+    return;
+  }
+
+  const guardado = localStorage.getItem(`paciente_${cc}`);
+  if (guardado) {
+    const datos = JSON.parse(guardado);
+    cargarDatosEnFormulario(datos);
+    renderizarReporteVisual(datos);
+    
+    // Cambiar automáticamente a la Pestaña 1 para ver/modificar
+    cambiarPestaña('tab-registro', document.querySelectorAll('.tab-btn')[0]);
+    $("estado_consulta").textContent = "Paciente cargado correctamente en el formulario para edición.";
+    $("estado_consulta").style.color = "green";
+  } else {
+    $("estado_consulta").textContent = "No se encontró ningún paciente registrado con esta cédula.";
+    $("estado_consulta").style.color = "red";
+  }
+}
+
+function obtenerObjetoFormulario() {
+  const diagSelect = $("diagnostico_select").value;
+  const diagOtro = $("diagnostico_otro").value;
+  const epsSelect = $("eps_select").value;
+  const epsOtra = $("eps_otra").value;
+
+  const medicosLista = [];
+  document.querySelectorAll('.medico-card').forEach(card => {
+    medicosLista.push({
+      rol: card.querySelector('.med_rol').value,
+      especialidad: card.querySelector('.med_especialidad').value,
+      nombre: card.querySelector('.med_nombre').value,
+      apellido: card.querySelector('.med_apellido').value,
+      sufijo: card.querySelector('.med_sufijo').value,
+      direccion: card.querySelector('.med_direccion').value,
+      ciudad: card.querySelector('.med_ciudad').value,
+      telefono: card.querySelector('.med_telefono').value
+    });
+  });
+
+  return {
+    fecha_diligenciamiento: $("fecha_diligenciamiento").value,
+    especialista: { nombre: $("esp_nombre").value, apellido: $("esp_apellido").value },
+    paciente: {
+      documento: $("documento").value,
+      medical_record: $("medical_record").value,
+      eps: (epsSelect === "OTRA") ? epsOtra : epsSelect,
+      primer_nombre: $("primer_nombre").value,
+      segundo_nombre: $("segundo_nombre").value,
+      primer_apellido: $("primer_apellido").value,
+      segundo_apellido: $("segundo_apellido").value,
+      sufijo: $("sufijo_paciente").value,
+      fecha_nacimiento: $("fecha_nacimiento").value,
+      sexo: $("sexo").value,
+      rh: $("rh").value,
+      direccion: $("direccion").value,
+      telefono: $("telefono").value,
+      ciudad: $("ciudad").value,
+      departamento: $("departamento").value,
+      pais: $("pais").value
+    },
+    diagnostico: {
+      indicacion_principal: (diagSelect === "OTRO") ? diagOtro : diagSelect,
+      fraccion_eyeccion: $("fe_porcentaje").value,
+      indicaciones_otras: $("indicaciones_otras").value
+    },
+    hospital: {
+      nombre: $("hospital_nombre").value,
+      direccion: $("hospital_direccion").value,
+      ciudad: $("hospital_ciudad").value,
+      departamento: $("hospital_departamento").value,
+      telefono: $("hospital_telefono").value
+    },
+    medicos: medicosLista
+  };
+}
+
+function cargarDatosEnFormulario(data) {
+  if (!data) return;
+  const p = data.paciente;
+  $("fecha_diligenciamiento").value = data.fecha_diligenciamiento || "";
+  $("esp_nombre").value = data.especialista.nombre || "";
+  $("esp_apellido").value = data.especialista.apellido || "";
+
+  $("documento").value = p.documento || "";
+  $("medical_record").value = p.medical_record || "";
+  $("primer_nombre").value = p.primer_nombre || "";
+  $("segundo_nombre").value = p.segundo_nombre || "";
+  $("primer_apellido").value = p.primer_apellido || "";
+  $("segundo_apellido").value = p.segundo_apellido || "";
+  $("sufijo_paciente").value = p.sufijo || "";
+  $("fecha_nacimiento").value = p.fecha_nacimiento || "";
+  $("sexo").value = p.sexo || "";
+  $("rh").value = p.rh || "";
+  $("direccion").value = p.direccion || "";
+  $("telefono").value = p.telefono || "";
+  $("ciudad").value = p.ciudad || "";
+  $("departamento").value = p.departamento || "";
+  $("pais").value = p.pais || "COLOMBIA";
+
+  $("fe_porcentaje").value = data.diagnostico.fraccion_eyeccion || "";
+  $("indicaciones_otras").value = data.diagnostico.indicaciones_otras || "";
+
+  $("hospital_nombre").value = data.hospital.nombre || "";
+  $("hospital_direccion").value = data.hospital.direccion || "";
+  $("hospital_ciudad").value = data.hospital.ciudad || "";
+  $("hospital_departamento").value = data.hospital.departamento || "";
+  $("hospital_telefono").value = data.hospital.telefono || "";
+}
+
+function renderizarReporteVisual(data) {
+  if (!data) return;
+  const p = data.paciente;
+
+  $("lbl_last_name").textContent = `${p.primer_apellido || ''} ${p.segundo_apellido || ''}`.trim() || "--";
+  $("lbl_first_name").textContent = p.primer_nombre || "--";
+  $("lbl_middle_name").textContent = p.segundo_nombre || "--";
+  $("lbl_suffix").textContent = p.sufijo || "--";
+  $("lbl_gender").textContent = p.sexo || "--";
+  
+  $("lbl_street").textContent = p.direccion || "--";
+  $("lbl_city").textContent = p.ciudad || "--";
+  $("lbl_state").textContent = p.departamento || "--";
+  $("lbl_country").textContent = p.pais || "COLOMBIA";
+  
+  $("lbl_phone").textContent = p.telefono || "--";
+  $("lbl_ssn").textContent = p.documento || "--";
+  $("lbl_dob").textContent = p.fecha_nacimiento || "--";
+  $("lbl_mrn").textContent = p.medical_record || "--";
+  $("lbl_eps").textContent = p.eps || "--";
+
+  $("lbl_ind_primary").textContent = data.diagnostico.indicacion_principal || "--";
+  $("lbl_ind_other").textContent = data.diagnostico.indicaciones_otras || "--";
+
+  $("lbl_hosp_name").textContent = data.hospital.nombre || "--";
+  $("lbl_hosp_dir").textContent = data.hospital.direccion || "--";
+  $("lbl_hosp_city").textContent = data.hospital.ciudad || "--";
+  $("lbl_hosp_tel").textContent = data.hospital.telefono || "--";
+
+  const contMed = $("lbl_medicos_lista");
+  contMed.innerHTML = "";
+  if (data.medicos) {
+    data.medicos.forEach(m => {
+      contMed.innerHTML += `
+        <div style="border-bottom: 1px dashed #bbb; padding: 0.3rem 0; margin-bottom: 0.2rem;">
+          <div class="pdf-row">
+            <div class="pdf-col" style="flex: 1.3;"><strong style="text-transform: uppercase;">${m.rol}</strong> <span class="pdf-label">Physician Last Name:</span> <span class="pdf-val">${m.apellido}</span></div>
+            <div class="pdf-col"><span class="pdf-label">First Name:</span> <span class="pdf-val">${m.nombre}</span></div>
+            <div class="pdf-col"><span class="pdf-label">Middle:</span> <span class="pdf-val">--</span></div>
+            <div class="pdf-col"><span class="pdf-label">Suffix:</span> <span class="pdf-val">${m.sufijo}</span></div>
+            <div class="pdf-col"><span class="pdf-label">Specialty:</span> <span class="pdf-val">${m.especialidad}</span></div>
+          </div>
+          <div class="pdf-row">
+            <div class="pdf-col" style="flex: 2;"><span class="pdf-label">Street:</span> <span class="pdf-val">${m.direccion}</span></div>
+            <div class="pdf-col"><span class="pdf-label">City:</span> <span class="pdf-val">${m.ciudad}</span></div>
+            <div class="pdf-col"><span class="pdf-label">Phone:</span> <span class="pdf-val">${m.telefono}</span></div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  $("vistaPreviaContainer").scrollIntoView({ behavior: 'smooth' });
+}
+
+function limpiarFormulario() {
+  const docActual = $("documento").value.trim();
+  if (docActual) {
+    localStorage.removeItem(`paciente_${docActual}`);
+  }
+
+  $("formPaciente").reset();
+  const hoy = new Date().toISOString().split('T')[0];
+  $("fecha_diligenciamiento").value = hoy;
+  $("pais").value = "COLOMBIA";
+  $("estado").textContent = "Selecciona una imagen o usa la cámara para autocompletar la cédula.";
+  $("estado").style.color = "#333";
+  $("eps_otra").style.display = "none";
+  $("diagnostico_otro").style.display = "none";
+
+  $("contenedor_medicos").innerHTML = "";
+  contadorMedicos = 0;
+  agregarMedico();
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+
+</body>
+</html>
